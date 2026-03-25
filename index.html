@@ -1240,95 +1240,103 @@ async function stopErase() {
    ATOMIC TERRITORY OPERATIONS - FIXES CONCURRENT DRAWING
    ============================ */
 async function processNewTerritory(newFeat) {
-  try {
-    const myUserId = currentUser.uid;
-    const newTerritoryId = push(ref(db, "territories")).key;
-    
-    await runTransaction(territoriesRef, (currentData) => {
-      if (!currentData) {
-        currentData = {};
-      }
-      
-      let updatedTerritories = { ...currentData };
-      let newGeometry = newFeat;
-      newGeometry.properties = { color: currentColor, userId: myUserId };
-      
-      // Process intersections with other players' territories
-      for (const territoryId in updatedTerritories) {
-        const territory = updatedTerritories[territoryId];
-        if (!territory || !territory.geometry) continue;
+  const myUserId = currentUser.uid;
+  const newTerritoryId = push(ref(db, "territories")).key;
+  
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await runTransaction(territoriesRef, (currentData) => {
+        if (!currentData) {
+          currentData = {};
+        }
         
-        // Skip if same color
-        if (territory.color === currentColor) continue;
+        let updatedTerritories = { ...currentData };
+        let newGeometry = newFeat;
+        newGeometry.properties = { color: currentColor, userId: myUserId };
         
-        try {
-          const targetGeom = territory.geometry;
-          if (turf.intersect(targetGeom, newGeometry)) {
-            const diff = turf.difference(targetGeom, newGeometry);
-            if (diff) {
-              updatedTerritories[territoryId] = {
-                ...territory,
-                geometry: diff,
-                lastModified: Date.now()
-              };
-            } else {
-              delete updatedTerritories[territoryId];
+        // Process intersections with other players' territories
+        for (const territoryId in updatedTerritories) {
+          const territory = updatedTerritories[territoryId];
+          if (!territory || !territory.geometry) continue;
+          
+          // Skip if same color
+          if (territory.color === currentColor) continue;
+          
+          try {
+            const targetGeom = territory.geometry;
+            if (turf.intersect(targetGeom, newGeometry)) {
+              const diff = turf.difference(targetGeom, newGeometry);
+              if (diff) {
+                updatedTerritories[territoryId] = {
+                  ...territory,
+                  geometry: diff,
+                  lastModified: Date.now()
+                };
+              } else {
+                delete updatedTerritories[territoryId];
+              }
             }
+          } catch (e) {
+            console.error("Intersection error:", e);
           }
-        } catch (e) {
-          console.error("Intersection error:", e);
         }
-      }
-      
-      // Merge with existing territories of same color
-      let existingTerritoryOfMyColor = null;
-      let existingId = null;
-      for (const territoryId in updatedTerritories) {
-        const territory = updatedTerritories[territoryId];
-        if (territory && territory.color === currentColor && territory.userId === myUserId) {
-          existingTerritoryOfMyColor = territory.geometry;
-          existingId = territoryId;
-          break;
-        }
-      }
-      
-      if (existingTerritoryOfMyColor) {
-        try {
-          const merged = turf.union(existingTerritoryOfMyColor, newGeometry);
-          if (merged) {
-            newGeometry = merged;
-            delete updatedTerritories[existingId];
+        
+        // Merge with existing territories of same color
+        let existingTerritoryOfMyColor = null;
+        let existingId = null;
+        for (const territoryId in updatedTerritories) {
+          const territory = updatedTerritories[territoryId];
+          if (territory && territory.color === currentColor && territory.userId === myUserId) {
+            existingTerritoryOfMyColor = territory.geometry;
+            existingId = territoryId;
+            break;
           }
-        } catch (e) {
-          console.error("Union error:", e);
         }
+        
+        if (existingTerritoryOfMyColor) {
+          try {
+            const merged = turf.union(existingTerritoryOfMyColor, newGeometry);
+            if (merged) {
+              newGeometry = merged;
+              delete updatedTerritories[existingId];
+            }
+          } catch (e) {
+            console.error("Union error:", e);
+          }
+        }
+        
+        // Add the new/merged territory
+        updatedTerritories[newTerritoryId] = {
+          geometry: newGeometry,
+          color: currentColor,
+          userId: myUserId,
+          username: currentUser.displayName || currentUser.email.split('@')[0],
+          createdAt: Date.now(),
+          lastModified: Date.now()
+        };
+        
+        return updatedTerritories;
+      });
+      
+      showInfo("✅ Territory claimed!");
+      return; // success, stop retrying
+    } catch (error) {
+      console.error(`Territory attempt ${attempt + 1} failed:`, error);
+      if (attempt < 2) {
+        await new Promise(r => setTimeout(r, 200 * (attempt + 1))); // wait 200ms, 400ms before retrying
+      } else {
+        showError("❌ Failed to save territory. Try again.");
       }
-      
-      // Add the new/merged territory
-      updatedTerritories[newTerritoryId] = {
-        geometry: newGeometry,
-        color: currentColor,
-        userId: myUserId,
-        username: currentUser.displayName || currentUser.email.split('@')[0],
-        createdAt: Date.now(),
-        lastModified: Date.now()
-      };
-      
-      return updatedTerritories;
-    });
-    
-    showInfo("✅ Territory claimed!");
-  } catch (error) {
-    console.error("Error processing territory:", error);
-    showError("❌ Failed to save territory. Try again.");
+    }
   }
 }
 
 async function eraseTerritory(eraseFeat) {
-  try {
-    const myUserId = currentUser.uid;
-    
-    await runTransaction(territoriesRef, (currentData) => {
+  const myUserId = currentUser.uid;
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await runTransaction(territoriesRef, (currentData) => {
       if (!currentData) {
         return currentData;
       }
@@ -1365,15 +1373,21 @@ async function eraseTerritory(eraseFeat) {
       }
       
       return updatedTerritories;
-    });
-    
-    showInfo("✂️ Territory erased!");
-  } catch (error) {
-    console.error("Error erasing territory:", error);
-    if (error.message === "No territory to erase") {
-      showError("You don't have any territory to erase!");
-    } else {
-      showError("❌ Failed to erase territory.");
+      });
+
+      showInfo("✂️ Territory erased!");
+      return; // success
+    } catch (error) {
+      console.error(`Erase attempt ${attempt + 1} failed:`, error);
+      if (error.message === "No territory to erase") {
+        showError("You don't have any territory to erase!");
+        return;
+      }
+      if (attempt < 2) {
+        await new Promise(r => setTimeout(r, 200 * (attempt + 1)));
+      } else {
+        showError("❌ Failed to erase territory.");
+      }
     }
   }
 }
