@@ -459,7 +459,7 @@
 <div id="map"></div>
 <div class="panel">
   <strong>🌍 Territory War</strong><br>
-  <span id="desktopInstructions">Hold <b>E</b> to draw (max 100 km²).<br>Hold <b>R</b> to erase.<br>Hold <b>Ctrl + Click</b> to copy color.</span>
+  <span id="desktopInstructions">Hold <b>E</b> to draw (max 500 km²).<br>Hold <b>R</b> to erase.<br>Hold <b>Ctrl + Click</b> to copy color.</span>
   <span id="mobileInstructions" style="display:none;">Use buttons below to draw/erase.<br>Long-press territory to copy color.</span><br><br>
   <button id="changeColor">Change Color</button>
   <input type="color" id="colorPicker" value="#00ff00" style="display:none;">
@@ -579,7 +579,7 @@ const previewLayer = L.layerGroup().addTo(map);
    Constants & State
    ============================ */
 const TERRITORY_OPACITY = 0.55;
-const MAX_DRAW_SIZE_KM2 = 100;
+const MAX_DRAW_SIZE_KM2 = 50;
 const DRAW_COOLDOWN_MS = 5000;
 const ERASE_COOLDOWN_MS = 10000;
 
