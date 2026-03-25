@@ -1,0 +1,1706 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<link rel="icon" type="image/x-icon" href="/favicon.ico" sizes="32x32">
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Territory War</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  html, body, #map { height: 100%; margin: 0; padding: 0; background: #1e1e1e; }
+  .panel {
+    position: fixed; top: 10px; left: 10px;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 15px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+    font-family: 'Arial', sans-serif;
+    z-index: 1000;
+    max-width: 260px;
+    transition: all 0.3s ease;
+  }
+  #authButton {
+    top: 10px; right: 10px; left: auto;
+    max-width: 220px;
+  }
+  #profileBtn {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    background-color: #2196F3;
+    color: white;
+    border: none;
+    font-size: 22px;
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 0;
+    margin: 0;
+  }
+  #profileBtn:hover {
+    background-color: #1976D2;
+  }
+  #dashboardModal {
+    display: none;
+    position: fixed;
+    z-index: 2000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(5px);
+  }
+  #dashboardModal .modal-content {
+    background-color: #fff;
+    margin: 10% auto;
+    padding: 0;
+    border-radius: 15px;
+    width: 90%;
+    max-width: 450px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    animation: slideIn 0.3s ease-out;
+  }
+  #dashboardModal .panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background: linear-gradient(135deg, #2196F3, #1976D2);
+    border-radius: 15px 15px 0 0;
+    color: white;
+  }
+  #dashboardModal .panel-header strong {
+    font-size: 18px;
+    color: white;
+  }
+  .menu-tabs {
+    display: flex;
+    border-bottom: 2px solid #e0e0e0;
+    background: #f5f5f5;
+  }
+  .menu-tab {
+    flex: 1;
+    padding: 12px 20px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: #666;
+    transition: all 0.3s ease;
+    border-bottom: 3px solid transparent;
+    margin: 0;
+  }
+  .menu-tab:hover {
+    background: #e8e8e8;
+    color: #333;
+  }
+  .menu-tab.active {
+    color: #2196F3;
+    border-bottom-color: #2196F3;
+    background: white;
+  }
+  .tab-content {
+    display: none;
+    padding: 20px;
+  }
+  .tab-content.active {
+    display: block;
+  }
+  #dashboardModal .modal-body {
+    padding: 0;
+  }
+  #dashboardModal .modal-body p {
+    margin: 10px 0;
+  }
+  #dashboardModal input {
+    width: 100%;
+    padding: 10px;
+    margin-top: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    box-sizing: border-box;
+    font-size: 14px;
+  }
+  #dashboardModal button {
+    margin-top: 10px;
+    padding: 10px 15px;
+    font-size: 14px;
+  }
+  button {
+    margin-top: 10px;
+    padding: 8px 15px;
+    border: none;
+    border-radius: 5px;
+    background-color: #4CAF50;
+    color: white;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.3s ease;
+  }
+  button:hover {
+    background-color: #45a049;
+  }
+  #changeColor {
+    background-color: #2196F3;
+  }
+  #changeColor:hover {
+    background-color: #1976D2;
+  }
+  .error { color: red; display: none; margin-top: 8px; font-size: 12px; }
+  .info { color: #4CAF50; display: none; margin-top: 8px; font-size: 12px; }
+  #playerCount {
+    position: fixed; bottom: 10px; left: 10px;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 8px 12px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+    font-family: 'Arial', sans-serif;
+    z-index: 1000;
+    font-size: 14px;
+  }
+  .modal {
+    display: none;
+    position: fixed;
+    z-index: 2000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(5px);
+  }
+  .modal-content {
+    background-color: #fff;
+    margin: 10% auto;
+    padding: 20px;
+    border-radius: 15px;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    animation: slideIn 0.3s ease-out;
+  }
+  @keyframes slideIn {
+    from { transform: translateY(-50px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  .modal h3 {
+    margin: 0 0 15px;
+    font-size: 20px;
+    color: #333;
+    text-align: center;
+  }
+  .modal input {
+    width: 100%;
+    padding: 12px;
+    margin: 10px 0;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    box-sizing: border-box;
+    font-size: 14px;
+    transition: border-color 0.3s ease;
+  }
+  .modal input:focus {
+    border-color: #4CAF50;
+    outline: none;
+  }
+  .modal button {
+    width: 48%;
+    margin: 5px 1%;
+    padding: 12px;
+    font-size: 14px;
+  }
+  #modalToggle {
+    background-color: #f44336;
+  }
+  #modalToggle:hover {
+    background-color: #da190b;
+  }
+  #chatPanel {
+    position: fixed;
+    bottom: 10px;
+    right: 10px;
+    width: 300px;
+    height: 400px;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+    display: none;
+    flex-direction: column;
+    z-index: 1000;
+    overflow: hidden;
+  }
+  #chatToggleBtn {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background-color: #2196F3;
+    color: white;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+    margin: 0;
+    padding: 0;
+  }
+  #chatToggleBtn:hover {
+    background-color: #1976D2;
+  }
+  .panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 15px;
+    background: rgba(33, 150, 243, 0.1);
+    border-bottom: 1px solid #ddd;
+  }
+  .panel-header strong {
+    font-size: 16px;
+    color: #333;
+  }
+  .close-btn {
+    background: #f44336;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+  }
+  .close-btn:hover {
+    background: #da190b;
+  }
+  #chatMessages {
+    flex: 1;
+    padding: 10px;
+    overflow-y: auto;
+    font-size: 14px;
+    display: flex;
+    flex-direction: column;
+  }
+  #chatInputContainer {
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(255, 255, 255, 0.95);
+    border-top: 1px solid #ddd;
+  }
+  #chatInput {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 14px;
+    resize: none;
+    overflow: hidden;
+  }
+  #sendMessage {
+    padding: 8px 15px;
+    border: none;
+    border-radius: 5px;
+    background-color: #4CAF50;
+    color: white;
+    cursor: pointer;
+    font-size: 14px;
+    margin: 0;
+  }
+  #sendMessage:hover {
+    background-color: #45a049;
+  }
+  .chat-message {
+    margin: 5px 0;
+    padding: 8px;
+    border-radius: 5px;
+    word-wrap: break-word;
+  }
+  .chat-message.own { background: #e3f2fd; }
+  .chat-message.other { background: #f5f5f5; }
+  #mobileDrawBtn, #mobileEraseBtn {
+    background-color: #FF5722;
+    font-weight: bold;
+  }
+  #mobileDrawBtn.active {
+    background-color: #4CAF50;
+  }
+  #mobileEraseBtn {
+    background-color: #f44336;
+  }
+  #mobileEraseBtn.active {
+    background-color: #e91e63;
+  }
+  @media (max-width: 768px) {
+    .panel { 
+      max-width: 140px; 
+      font-size: 10px;
+      padding: 8px;
+    }
+    .panel strong {
+      font-size: 11px;
+    }
+    #authButton {
+      max-width: 140px;
+      font-size: 10px;
+      padding: 8px;
+    }
+    #profileBtn {
+      width: 40px;
+      height: 40px;
+      font-size: 20px;
+      top: 10px;
+      right: 10px;
+    }
+    #dashboardModal .modal-content {
+      width: 95%;
+      margin: 15% auto;
+      max-width: 380px;
+    }
+    #dashboardModal .panel-header {
+      padding: 12px 15px;
+    }
+    #dashboardModal .panel-header strong {
+      font-size: 16px;
+    }
+    .menu-tab {
+      padding: 10px 12px;
+      font-size: 12px;
+    }
+    .tab-content {
+      padding: 15px;
+    }
+    #dashboardModal input {
+      padding: 8px;
+      font-size: 12px;
+    }
+    #dashboardModal button {
+      padding: 8px 12px;
+      font-size: 12px;
+    }
+    button {
+      padding: 5px 8px;
+      font-size: 10px;
+      margin-top: 6px;
+    }
+    #playerCount {
+      font-size: 10px;
+      padding: 5px 8px;
+    }
+    #chatPanel { 
+      width: 90%; 
+      height: 60%;
+      max-width: 350px;
+      max-height: 450px;
+      bottom: 80px;
+      right: 5%;
+    }
+    #chatToggleBtn {
+      width: 55px;
+      height: 55px;
+      font-size: 26px;
+      bottom: 15px;
+      right: 15px;
+    }
+    .panel-header {
+      padding: 8px 10px;
+    }
+    .panel-header strong {
+      font-size: 12px;
+    }
+    .close-btn {
+      width: 22px;
+      height: 22px;
+      font-size: 14px;
+    }
+    #chatMessages {
+      font-size: 11px;
+      padding: 8px;
+    }
+    #chatInputContainer {
+      padding: 8px;
+    }
+    #chatInput {
+      font-size: 11px;
+      padding: 6px;
+    }
+    #sendMessage {
+      padding: 6px 10px;
+      font-size: 11px;
+    }
+    .chat-message {
+      padding: 6px;
+      font-size: 11px;
+    }
+  }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="panel">
+  <strong>🌍 Territory War</strong><br>
+  <span id="desktopInstructions">Hold <b>E</b> to draw (max 100 km²).<br>Hold <b>R</b> to erase.<br>Hold <b>Ctrl + Click</b> to copy color.</span>
+  <span id="mobileInstructions" style="display:none;">Use buttons below to draw/erase.<br>Long-press territory to copy color.</span><br><br>
+  <button id="changeColor">Change Color</button>
+  <input type="color" id="colorPicker" value="#00ff00" style="display:none;">
+  <div class="error" id="errorMsg"></div>
+  <div class="info" id="infoMsg">Drawing...</div>
+  <button id="mobileDrawBtn" style="display:none;margin-top:10px;">🎨 Draw Mode: OFF</button>
+  <button id="mobileEraseBtn" style="display:none;margin-top:10px;">🧹 Erase Mode: OFF</button>
+</div>
+<div id="authButton" class="panel">
+  <strong>👤 Account</strong><br>
+  <button id="loginRegisterBtn">Login / Register</button>
+  <div id="errorAuthMsg" class="error"></div>
+  <div id="infoAuthMsg" class="info"></div>
+</div>
+<button id="profileBtn">👤</button>
+<div id="dashboardModal">
+  <div class="modal-content">
+    <div class="panel-header">
+      <strong>☰ Menu</strong>
+      <button class="close-btn" id="closeDashboardBtn">✕</button>
+    </div>
+    <div class="menu-tabs">
+      <button class="menu-tab active" data-tab="profile">👤 Profile</button>
+      <button class="menu-tab" data-tab="admin" id="adminTab" style="display: none;">🔧 Admin</button>
+    </div>
+    <div class="modal-body">
+      <div class="tab-content active" id="profileTab">
+        <p style="margin: 10px 0 20px;">Welcome, <span id="userDisplayName" style="color: #2196F3; font-weight: bold;"></span>!</p>
+        <input type="text" id="newUsername" placeholder="New Username" style="margin-bottom: 10px;">
+        <button id="changeUsernameBtn">Change Username</button>
+        <div style="display: flex; gap: 10px; margin-top: 10px;">
+          <button id="deleteAccountBtn" style="background-color: #f44336; flex: 1;">Delete Account</button>
+          <button id="logoutBtn" style="background-color: #ff9800; flex: 1;">Logout</button>
+        </div>
+      </div>
+      <div class="tab-content" id="adminTabContent">
+        <input type="text" id="adminTargetUsername" placeholder="Target Username">
+        <button id="banUserBtn">Ban User</button>
+        <button id="unbanUserBtn">Unban User</button>
+        <button id="muteUserBtn">Mute User</button>
+        <button id="unmuteUserBtn">Unmute User</button>
+        <div id="adminError" class="error"></div>
+        <div id="adminInfo" class="info"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="playerCount">Players Online: 0</div>
+<button id="chatToggleBtn">💬</button>
+<div id="chatPanel">
+  <div class="panel-header">
+    <strong>💬 Chat</strong>
+    <button class="close-btn" id="closeChatBtn">✕</button>
+  </div>
+  <div id="chatMessages"></div>
+  <div id="chatInputContainer">
+    <input type="text" id="chatInput" placeholder="Type a message..." maxlength="100">
+    <button id="sendMessage">Send</button>
+  </div>
+</div>
+<div id="authModal" class="modal">
+  <div class="modal-content">
+    <h3 id="modalTitle">Login</h3>
+    <input type="email" id="modalEmail" placeholder="Email" required>
+    <input type="password" id="modalPassword" placeholder="Password" required>
+    <input type="text" id="modalUsername" placeholder="Username" required style="display: none;">
+    <button id="modalSubmit">Login</button>
+    <button id="modalToggle">Register Instead</button>
+    <div id="modalError" style="color: red; margin-top: 10px; display: none;"></div>
+  </div>
+</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+<script type="module">
+/* ============================
+   Firebase + App Setup
+   ============================ */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+import { getDatabase, ref, onValue, set, onDisconnect, serverTimestamp, get, remove, push, runTransaction } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, deleteUser, updateProfile, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA-5dvmUPrw9wyD8-qaiE18mBT-eXS9iFM",
+  authDomain: "territory-war-ea4ed.firebaseapp.com",
+  databaseURL: "https://territory-war-ea4ed-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "territory-war-ea4ed",
+  storageBucket: "territory-war-ea4ed.firebasestorage.app",
+  messagingSenderId: "300702261681",
+  appId: "1:300702261681:web:a4745646f26a4f1ac41d90",
+  measurementId: "G-ED13XCYTPB"
+};
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const auth = getAuth(app);
+
+const territoriesRef = ref(db, "territories");
+const chatRef = ref(db, "chat");
+const playersRef = ref(db, "players");
+const bansRef = ref(db, "bans");
+const mutesRef = ref(db, "mutes");
+const usernamesRef = ref(db, "usernames");
+
+const ADMIN_USERNAME = "MrFrozy";
+
+/* ============================
+   Map + Layers
+   ============================ */
+const map = L.map('map', {
+  tap: false
+}).setView([20, 0], 3);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 23 }).addTo(map);
+
+const drawnLayer = L.featureGroup().addTo(map);
+const previewLayer = L.layerGroup().addTo(map);
+
+/* ============================
+   Constants & State
+   ============================ */
+const TERRITORY_OPACITY = 0.55;
+const MAX_DRAW_SIZE_KM2 = 100;
+const DRAW_COOLDOWN_MS = 5000;
+const ERASE_COOLDOWN_MS = 10000;
+
+let territories = {};
+let currentColor = localStorage.getItem("lastColor") || "#00ff00";
+let drawing = false;
+let erasing = false;
+let eHeld = false;
+let rHeld = false;
+let linePoints = [];
+let previewLine = null;
+let lastDrawTime = 0;
+let lastEraseTime = 0;
+let playerId = localStorage.getItem("tw_playerId") || "player_" + Math.random().toString(36).substring(2, 10);
+localStorage.setItem("tw_playerId", playerId);
+let isAdmin = false;
+let currentUser = null;
+let isTyping = false;
+
+/* ============================
+   UI Elements
+   ============================ */
+const colorPicker = document.getElementById("colorPicker");
+const changeColorBtn = document.getElementById("changeColor");
+const errorMsg = document.getElementById("errorMsg");
+const infoMsg = document.getElementById("infoMsg");
+const mobileDrawBtn = document.getElementById("mobileDrawBtn");
+const mobileEraseBtn = document.getElementById("mobileEraseBtn");
+const userDisplayName = document.getElementById("userDisplayName");
+const adminTargetUsername = document.getElementById("adminTargetUsername");
+const banUserBtn = document.getElementById("banUserBtn");
+const unbanUserBtn = document.getElementById("unbanUserBtn");
+const muteUserBtn = document.getElementById("muteUserBtn");
+const unmuteUserBtn = document.getElementById("unmuteUserBtn");
+const adminError = document.getElementById("adminError");
+const adminInfo = document.getElementById("adminInfo");
+const adminTab = document.getElementById("adminTab");
+const authButton = document.getElementById("authButton");
+const loginRegisterBtn = document.getElementById("loginRegisterBtn");
+const profileBtn = document.getElementById("profileBtn");
+const dashboardModal = document.getElementById("dashboardModal");
+const closeDashboardBtn = document.getElementById("closeDashboardBtn");
+const newUsername = document.getElementById("newUsername");
+const changeUsernameBtn = document.getElementById("changeUsernameBtn");
+const deleteAccountBtn = document.getElementById("deleteAccountBtn");
+const logoutBtn = document.getElementById("logoutBtn");
+const errorAuthMsg = document.getElementById("errorAuthMsg");
+const infoAuthMsg = document.getElementById("infoAuthMsg");
+const authModal = document.getElementById("authModal");
+const modalTitle = document.getElementById("modalTitle");
+const modalEmail = document.getElementById("modalEmail");
+const modalPassword = document.getElementById("modalPassword");
+const modalUsername = document.getElementById("modalUsername");
+const modalSubmit = document.getElementById("modalSubmit");
+const modalToggle = document.getElementById("modalToggle");
+const modalError = document.getElementById("modalError");
+const chatPanel = document.getElementById("chatPanel");
+const chatMessages = document.getElementById("chatMessages");
+const chatInput = document.getElementById("chatInput");
+const sendMessage = document.getElementById("sendMessage");
+const playerCount = document.getElementById("playerCount");
+const desktopInstructions = document.getElementById("desktopInstructions");
+const mobileInstructions = document.getElementById("mobileInstructions");
+const closeChatBtn = document.getElementById("closeChatBtn");
+const chatToggleBtn = document.getElementById("chatToggleBtn");
+
+/* ============================
+   Menu tabs functionality
+   ============================ */
+const menuTabs = document.querySelectorAll('.menu-tab');
+const tabContents = document.querySelectorAll('.tab-content');
+
+menuTabs.forEach(tab => {
+  tab.addEventListener('click', () => {
+    const targetTab = tab.getAttribute('data-tab');
+    
+    menuTabs.forEach(t => t.classList.remove('active'));
+    tabContents.forEach(c => c.classList.remove('active'));
+    
+    tab.classList.add('active');
+    if (targetTab === 'profile') {
+      document.getElementById('profileTab').classList.add('active');
+    } else if (targetTab === 'admin') {
+      document.getElementById('adminTabContent').classList.add('active');
+    }
+  });
+});
+
+/* ============================
+   Close button handlers
+   ============================ */
+closeChatBtn.onclick = () => {
+  chatPanel.style.display = "none";
+  chatToggleBtn.style.display = "flex";
+};
+
+closeDashboardBtn.onclick = () => {
+  dashboardModal.style.display = "none";
+};
+
+chatToggleBtn.onclick = () => {
+  chatPanel.style.display = "flex";
+  chatToggleBtn.style.display = "none";
+};
+
+profileBtn.onclick = () => {
+  dashboardModal.style.display = "block";
+};
+
+window.onclick = (event) => {
+  if (event.target === authModal) {
+    authModal.style.display = "none";
+    modalUsername.style.display = "none";
+    modalTitle.textContent = "Login";
+    modalSubmit.textContent = "Login";
+    modalToggle.textContent = "Register Instead";
+    modalError.style.display = "none";
+    modalEmail.value = modalPassword.value = modalUsername.value = "";
+  }
+  if (event.target === dashboardModal) {
+    dashboardModal.style.display = "none";
+  }
+};
+
+/* ============================
+   Color picker UI
+   ============================ */
+changeColorBtn.style.backgroundColor = currentColor;
+changeColorBtn.onclick = () => colorPicker.click();
+colorPicker.onchange = (e) => {
+  currentColor = e.target.value;
+  changeColorBtn.style.backgroundColor = currentColor;
+  localStorage.setItem("lastColor", currentColor);
+};
+
+/* ============================
+   Player presence
+   ============================ */
+const myRef = ref(db, `players/${playerId}`);
+const lastDrawRef = ref(db, `players/${playerId}/lastDraw`);
+const lastEraseRef = ref(db, `players/${playerId}/lastErase`);
+set(myRef, { online: true, lastActive: serverTimestamp(), lastDraw: lastDrawTime, lastErase: lastEraseTime }).catch(() => {});
+onDisconnect(myRef).remove();
+setInterval(() => {
+  set(myRef, { online: true, lastActive: serverTimestamp(), lastDraw: lastDrawTime, lastErase: lastEraseTime }).catch(() => {});
+}, 15000);
+
+onValue(playersRef, (snap) => {
+  const players = snap.val() || {};
+  const now = Date.now();
+  let count = 0;
+  for (const k in players) {
+    const p = players[k];
+    const last = p.lastActive?.seconds ? p.lastActive.seconds * 1000 : (p.lastActive || 0);
+    if (now - last < 30000) count++;
+  }
+  playerCount.textContent = `Players Online: ${count}`;
+}, (err) => console.error("Error reading players:", err));
+
+onValue(lastDrawRef, (snap) => {
+  const v = snap.val();
+  lastDrawTime = v || 0;
+});
+
+onValue(lastEraseRef, (snap) => {
+  const v = snap.val();
+  lastEraseTime = v || 0;
+});
+
+/* ============================
+   Load territories from DB with atomic operations
+   ============================ */
+onValue(territoriesRef, (snapshot) => {
+  const data = snapshot.val() || {};
+  territories = data;
+  redrawAll();
+});
+
+/* ============================
+   Desktop drawing/erasing controls
+   ============================ */
+document.addEventListener("keydown", (e) => {
+  if (isTyping) return;
+  if ((e.key === "e" || e.key === "E") && !eHeld && !rHeld) { 
+    eHeld = true; 
+    startDraw(); 
+  }
+  if ((e.key === "r" || e.key === "R") && !rHeld && !eHeld) { 
+    rHeld = true; 
+    startErase(); 
+  }
+});
+
+document.addEventListener("keyup", (e) => {
+  if (isTyping) return;
+  if (e.key === "e" || e.key === "E") { 
+    eHeld = false; 
+    stopDraw(); 
+  }
+  if (e.key === "r" || e.key === "R") { 
+    rHeld = false; 
+    stopErase(); 
+  }
+});
+
+map.on("mousemove", (e) => {
+  if ((drawing || erasing) && !isMobile) {
+    linePoints.push(e.latlng);
+    if (previewLine) previewLine.setLatLngs(linePoints);
+  }
+});
+
+map.on("click", (ev) => {
+  if (!ev.originalEvent.ctrlKey) return;
+  const pt = turf.point([ev.latlng.lng, ev.latlng.lat]);
+  for (const territoryId in territories) {
+    const territory = territories[territoryId];
+    if (!territory || !territory.geometry) continue;
+    try {
+      if (turf.booleanPointInPolygon(pt, territory.geometry)) {
+        currentColor = territory.color;
+        changeColorBtn.style.backgroundColor = currentColor;
+        localStorage.setItem("lastColor", currentColor);
+        showInfo(`🎨 Picked ${currentColor}`);
+        return;
+      }
+    } catch {}
+  }
+});
+
+/* ============================
+   Mobile detection
+   ============================ */
+const isMobile = /Mobi|Android/i.test(navigator.userAgent) || window.innerWidth < 768;
+if (isMobile) {
+  mobileDrawBtn.style.display = "block";
+  mobileEraseBtn.style.display = "block";
+  desktopInstructions.style.display = "none";
+  mobileInstructions.style.display = "inline";
+}
+
+let drawMode = false;
+let eraseMode = false;
+
+mobileDrawBtn.onclick = () => {
+  if (!currentUser) {
+    return showError("Please login to draw!");
+  }
+  drawMode = !drawMode;
+  if (drawMode) eraseMode = false;
+  mobileDrawBtn.textContent = `🎨 Draw Mode: ${drawMode ? 'ON' : 'OFF'}`;
+  mobileDrawBtn.classList.toggle('active', drawMode);
+  mobileEraseBtn.textContent = '🧹 Erase Mode: OFF';
+  mobileEraseBtn.classList.remove('active');
+  
+  if (drawMode) {
+    map.dragging.disable();
+    map.touchZoom.disable();
+    map.doubleClickZoom.disable();
+    map.scrollWheelZoom.disable();
+  } else {
+    if (drawing) cancelDraw();
+    map.dragging.enable();
+    map.touchZoom.enable();
+    map.doubleClickZoom.enable();
+    map.scrollWheelZoom.enable();
+  }
+};
+
+mobileEraseBtn.onclick = () => {
+  if (!currentUser) {
+    return showError("Please login to erase!");
+  }
+  eraseMode = !eraseMode;
+  if (eraseMode) drawMode = false;
+  mobileEraseBtn.textContent = `🧹 Erase Mode: ${eraseMode ? 'ON' : 'OFF'}`;
+  mobileEraseBtn.classList.toggle('active', eraseMode);
+  mobileDrawBtn.textContent = '🎨 Draw Mode: OFF';
+  mobileDrawBtn.classList.remove('active');
+  
+  if (eraseMode) {
+    map.dragging.disable();
+    map.touchZoom.disable();
+    map.doubleClickZoom.disable();
+    map.scrollWheelZoom.disable();
+  } else {
+    if (erasing) cancelErase();
+    map.dragging.enable();
+    map.touchZoom.enable();
+    map.doubleClickZoom.enable();
+    map.scrollWheelZoom.enable();
+  }
+};
+
+/* ============================
+   Mobile touch handlers
+   ============================ */
+let touchStartPos = null;
+let longPressTimer = null;
+let hasMoved = false;
+
+const mapContainer = map.getContainer();
+
+mapContainer.addEventListener('touchstart', (e) => {
+  if (e.touches.length !== 1) return;
+  
+  const touch = e.touches[0];
+  touchStartPos = { x: touch.clientX, y: touch.clientY };
+  hasMoved = false;
+  
+  if (drawMode) {
+    e.preventDefault();
+    e.stopPropagation();
+    startMobileDraw(touch);
+  } else if (eraseMode) {
+    e.preventDefault();
+    e.stopPropagation();
+    startMobileErase(touch);
+  } else {
+    longPressTimer = setTimeout(() => {
+      const latlng = map.containerPointToLatLng(L.point(touch.clientX, touch.clientY));
+      pickColorAt(latlng);
+    }, 500);
+  }
+}, { passive: false });
+
+mapContainer.addEventListener('touchmove', (e) => {
+  if (e.touches.length !== 1) return;
+  
+  const touch = e.touches[0];
+  
+  if (touchStartPos) {
+    const dx = touch.clientX - touchStartPos.x;
+    const dy = touch.clientY - touchStartPos.y;
+    if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+      hasMoved = true;
+    }
+  }
+  
+  if (longPressTimer && hasMoved) {
+    clearTimeout(longPressTimer);
+    longPressTimer = null;
+  }
+  
+  if (drawMode && drawing) {
+    e.preventDefault();
+    e.stopPropagation();
+    continueMobileDraw(touch);
+  } else if (eraseMode && erasing) {
+    e.preventDefault();
+    e.stopPropagation();
+    continueMobileErase(touch);
+  }
+}, { passive: false });
+
+mapContainer.addEventListener('touchend', (e) => {
+  if (longPressTimer) {
+    clearTimeout(longPressTimer);
+    longPressTimer = null;
+  }
+  
+  if (drawMode && drawing) {
+    e.preventDefault();
+    e.stopPropagation();
+    finishMobileDraw();
+  } else if (eraseMode && erasing) {
+    e.preventDefault();
+    e.stopPropagation();
+    finishMobileErase();
+  }
+  
+  touchStartPos = null;
+  hasMoved = false;
+}, { passive: false });
+
+mapContainer.addEventListener('touchcancel', (e) => {
+  if (longPressTimer) {
+    clearTimeout(longPressTimer);
+    longPressTimer = null;
+  }
+  
+  if (drawMode && drawing) {
+    cancelDraw();
+  } else if (eraseMode && erasing) {
+    cancelErase();
+  }
+  
+  touchStartPos = null;
+  hasMoved = false;
+});
+
+function startMobileDraw(touch) {
+  if (!currentUser) {
+    return showError("Please login to draw!");
+  }
+  const now = Date.now();
+  if (now - lastDrawTime < DRAW_COOLDOWN_MS) {
+    const remaining = ((DRAW_COOLDOWN_MS - (now - lastDrawTime)) / 1000).toFixed(1);
+    showError(`⏳ Wait ${remaining}s before drawing again.`);
+    return;
+  }
+  
+  drawing = true;
+  linePoints = [];
+  const latlng = map.containerPointToLatLng(L.point(touch.clientX, touch.clientY));
+  linePoints.push(latlng);
+  
+  if (previewLine) previewLayer.removeLayer(previewLine);
+  previewLine = L.polyline(linePoints, { 
+    color: currentColor, 
+    weight: 3, 
+    smoothFactor: 1, 
+    interactive: false 
+  }).addTo(previewLayer);
+  
+  infoMsg.textContent = 'Drawing...';
+  infoMsg.style.display = 'block';
+}
+
+function continueMobileDraw(touch) {
+  if (!drawing) return;
+  
+  const latlng = map.containerPointToLatLng(L.point(touch.clientX, touch.clientY));
+  const last = linePoints[linePoints.length - 1];
+  
+  if (!last || latlng.distanceTo(last) > 0.0001) {
+    linePoints.push(latlng);
+    if (previewLine) previewLine.setLatLngs(linePoints);
+  }
+}
+
+async function finishMobileDraw() {
+  if (!drawing) return;
+  
+  drawing = false;
+  infoMsg.style.display = 'none';
+  
+  if (previewLine) {
+    previewLayer.removeLayer(previewLine);
+    previewLine = null;
+  }
+  
+  if (linePoints.length < 3) {
+    linePoints = [];
+    return;
+  }
+  
+  linePoints.push(linePoints[0]);
+  
+  const poly = L.polygon(linePoints);
+  const newFeat = poly.toGeoJSON();
+  const areaKm2 = turf.area(newFeat) / 1e6;
+  
+  if (areaKm2 > MAX_DRAW_SIZE_KM2) {
+    showError(`❌ Too large! Max ${MAX_DRAW_SIZE_KM2} km².`);
+    linePoints = [];
+    return;
+  }
+  
+  const now = Date.now();
+  lastDrawTime = now;
+  await set(lastDrawRef, now);
+  await set(myRef, { online: true, lastActive: serverTimestamp(), lastDraw: now, lastErase: lastEraseTime });
+  
+  await processNewTerritory(newFeat);
+  linePoints = [];
+}
+
+function startMobileErase(touch) {
+  if (!currentUser) {
+    return showError("Please login to erase!");
+  }
+  const now = Date.now();
+  if (now - lastEraseTime < ERASE_COOLDOWN_MS) {
+    const remaining = ((ERASE_COOLDOWN_MS - (now - lastEraseTime)) / 1000).toFixed(1);
+    showError(`⏳ Wait ${remaining}s before erasing again.`);
+    return;
+  }
+  
+  erasing = true;
+  linePoints = [];
+  const latlng = map.containerPointToLatLng(L.point(touch.clientX, touch.clientY));
+  linePoints.push(latlng);
+  
+  if (previewLine) previewLayer.removeLayer(previewLine);
+  previewLine = L.polyline(linePoints, { 
+    color: '#ff0000', 
+    weight: 3, 
+    smoothFactor: 1, 
+    interactive: false,
+    dashArray: '10, 10'
+  }).addTo(previewLayer);
+  
+  infoMsg.textContent = 'Erasing...';
+  infoMsg.style.display = 'block';
+}
+
+function continueMobileErase(touch) {
+  if (!erasing) return;
+  
+  const latlng = map.containerPointToLatLng(L.point(touch.clientX, touch.clientY));
+  const last = linePoints[linePoints.length - 1];
+  
+  if (!last || latlng.distanceTo(last) > 0.0001) {
+    linePoints.push(latlng);
+    if (previewLine) previewLine.setLatLngs(linePoints);
+  }
+}
+
+async function finishMobileErase() {
+  if (!erasing) return;
+  
+  erasing = false;
+  infoMsg.style.display = 'none';
+  
+  if (previewLine) {
+    previewLayer.removeLayer(previewLine);
+    previewLine = null;
+  }
+  
+  if (linePoints.length < 3) {
+    linePoints = [];
+    return;
+  }
+  
+  linePoints.push(linePoints[0]);
+  
+  const poly = L.polygon(linePoints);
+  const eraseFeat = poly.toGeoJSON();
+  
+  const now = Date.now();
+  lastEraseTime = now;
+  await set(lastEraseRef, now);
+  await set(myRef, { online: true, lastActive: serverTimestamp(), lastDraw: lastDrawTime, lastErase: now });
+  
+  await eraseTerritory(eraseFeat);
+  linePoints = [];
+}
+
+function cancelDraw() {
+  drawing = false;
+  infoMsg.style.display = 'none';
+  if (previewLine) {
+    previewLayer.removeLayer(previewLine);
+    previewLine = null;
+  }
+  linePoints = [];
+}
+
+function cancelErase() {
+  erasing = false;
+  infoMsg.style.display = 'none';
+  if (previewLine) {
+    previewLayer.removeLayer(previewLine);
+    previewLine = null;
+  }
+  linePoints = [];
+}
+
+function pickColorAt(latlng) {
+  const pt = turf.point([latlng.lng, latlng.lat]);
+  for (const territoryId in territories) {
+    const territory = territories[territoryId];
+    if (!territory || !territory.geometry) continue;
+    try {
+      if (turf.booleanPointInPolygon(pt, territory.geometry)) {
+        currentColor = territory.color;
+        changeColorBtn.style.backgroundColor = currentColor;
+        localStorage.setItem('lastColor', currentColor);
+        showInfo(`🎨 Picked ${currentColor}`);
+        return;
+      }
+    } catch {}
+  }
+}
+
+/* ============================
+   Desktop drawing functions
+   ============================ */
+async function startDraw() {
+  if (!currentUser) {
+    return showError("Please login to draw!");
+  }
+  const now = Date.now();
+  if (now - lastDrawTime < DRAW_COOLDOWN_MS) {
+    const remaining = ((DRAW_COOLDOWN_MS - (now - lastDrawTime)) / 1000).toFixed(1);
+    return showError(`⏳ Wait ${remaining}s before drawing again.`);
+  }
+  drawing = true;
+  linePoints = [];
+  previewLine = L.polyline([], { color: currentColor, weight: 2, dashArray: "4,4" }).addTo(previewLayer);
+  infoMsg.textContent = 'Drawing...';
+  infoMsg.style.display = "block";
+}
+
+async function stopDraw() {
+  if (!drawing) return;
+  drawing = false;
+  infoMsg.style.display = "none";
+  if (previewLine) { previewLayer.removeLayer(previewLine); previewLine = null; }
+  if (linePoints.length < 3) { linePoints = []; return; }
+  
+  linePoints.push(linePoints[0]);
+  const poly = L.polygon(linePoints);
+  const newFeat = poly.toGeoJSON();
+  const areaKm2 = turf.area(newFeat) / 1e6;
+  if (areaKm2 > MAX_DRAW_SIZE_KM2) { 
+    linePoints = [];
+    return showError(`❌ Too large! Max ${MAX_DRAW_SIZE_KM2} km².`);
+  }
+  
+  const now = Date.now();
+  lastDrawTime = now;
+  await set(lastDrawRef, now);
+  await set(myRef, { online: true, lastActive: serverTimestamp(), lastDraw: now, lastErase: lastEraseTime });
+  
+  await processNewTerritory(newFeat);
+  linePoints = [];
+}
+
+async function startErase() {
+  if (!currentUser) {
+    return showError("Please login to erase!");
+  }
+  const now = Date.now();
+  if (now - lastEraseTime < ERASE_COOLDOWN_MS) {
+    const remaining = ((ERASE_COOLDOWN_MS - (now - lastEraseTime)) / 1000).toFixed(1);
+    return showError(`⏳ Wait ${remaining}s before erasing again.`);
+  }
+  erasing = true;
+  linePoints = [];
+  previewLine = L.polyline([], { color: '#ff0000', weight: 2, dashArray: "10, 10" }).addTo(previewLayer);
+  infoMsg.textContent = 'Erasing...';
+  infoMsg.style.display = "block";
+}
+
+async function stopErase() {
+  if (!erasing) return;
+  erasing = false;
+  infoMsg.style.display = "none";
+  if (previewLine) { previewLayer.removeLayer(previewLine); previewLine = null; }
+  if (linePoints.length < 3) { linePoints = []; return; }
+  
+  linePoints.push(linePoints[0]);
+  const poly = L.polygon(linePoints);
+  const eraseFeat = poly.toGeoJSON();
+  
+  const now = Date.now();
+  lastEraseTime = now;
+  await set(lastEraseRef, now);
+  await set(myRef, { online: true, lastActive: serverTimestamp(), lastDraw: lastDrawTime, lastErase: now });
+  
+  await eraseTerritory(eraseFeat);
+  linePoints = [];
+}
+
+/* ============================
+   ATOMIC TERRITORY OPERATIONS - FIXES CONCURRENT DRAWING
+   ============================ */
+async function processNewTerritory(newFeat) {
+  try {
+    const myUserId = currentUser.uid;
+    const newTerritoryId = push(ref(db, "territories")).key;
+    
+    await runTransaction(territoriesRef, (currentData) => {
+      if (!currentData) {
+        currentData = {};
+      }
+      
+      let updatedTerritories = { ...currentData };
+      let newGeometry = newFeat;
+      newGeometry.properties = { color: currentColor, userId: myUserId };
+      
+      // Process intersections with other players' territories
+      for (const territoryId in updatedTerritories) {
+        const territory = updatedTerritories[territoryId];
+        if (!territory || !territory.geometry) continue;
+        
+        // Skip if same color
+        if (territory.color === currentColor) continue;
+        
+        try {
+          const targetGeom = territory.geometry;
+          if (turf.intersect(targetGeom, newGeometry)) {
+            const diff = turf.difference(targetGeom, newGeometry);
+            if (diff) {
+              updatedTerritories[territoryId] = {
+                ...territory,
+                geometry: diff,
+                lastModified: Date.now()
+              };
+            } else {
+              delete updatedTerritories[territoryId];
+            }
+          }
+        } catch (e) {
+          console.error("Intersection error:", e);
+        }
+      }
+      
+      // Merge with existing territories of same color
+      let existingTerritoryOfMyColor = null;
+      let existingId = null;
+      for (const territoryId in updatedTerritories) {
+        const territory = updatedTerritories[territoryId];
+        if (territory && territory.color === currentColor && territory.userId === myUserId) {
+          existingTerritoryOfMyColor = territory.geometry;
+          existingId = territoryId;
+          break;
+        }
+      }
+      
+      if (existingTerritoryOfMyColor) {
+        try {
+          const merged = turf.union(existingTerritoryOfMyColor, newGeometry);
+          if (merged) {
+            newGeometry = merged;
+            delete updatedTerritories[existingId];
+          }
+        } catch (e) {
+          console.error("Union error:", e);
+        }
+      }
+      
+      // Add the new/merged territory
+      updatedTerritories[newTerritoryId] = {
+        geometry: newGeometry,
+        color: currentColor,
+        userId: myUserId,
+        username: currentUser.displayName || currentUser.email.split('@')[0],
+        createdAt: Date.now(),
+        lastModified: Date.now()
+      };
+      
+      return updatedTerritories;
+    });
+    
+    showInfo("✅ Territory claimed!");
+  } catch (error) {
+    console.error("Error processing territory:", error);
+    showError("❌ Failed to save territory. Try again.");
+  }
+}
+
+async function eraseTerritory(eraseFeat) {
+  try {
+    const myUserId = currentUser.uid;
+    
+    await runTransaction(territoriesRef, (currentData) => {
+      if (!currentData) {
+        return currentData;
+      }
+      
+      let updatedTerritories = { ...currentData };
+      let foundMyTerritory = false;
+      
+      for (const territoryId in updatedTerritories) {
+        const territory = updatedTerritories[territoryId];
+        if (!territory || !territory.geometry) continue;
+        
+        // Only erase from territories with my color and user ID
+        if (territory.color === currentColor && territory.userId === myUserId) {
+          foundMyTerritory = true;
+          try {
+            const diff = turf.difference(territory.geometry, eraseFeat);
+            if (diff) {
+              updatedTerritories[territoryId] = {
+                ...territory,
+                geometry: diff,
+                lastModified: Date.now()
+              };
+            } else {
+              delete updatedTerritories[territoryId];
+            }
+          } catch (e) {
+            console.error("Erase error:", e);
+          }
+        }
+      }
+      
+      if (!foundMyTerritory) {
+        throw new Error("No territory to erase");
+      }
+      
+      return updatedTerritories;
+    });
+    
+    showInfo("✂️ Territory erased!");
+  } catch (error) {
+    console.error("Error erasing territory:", error);
+    if (error.message === "No territory to erase") {
+      showError("You don't have any territory to erase!");
+    } else {
+      showError("❌ Failed to erase territory.");
+    }
+  }
+}
+
+/* ============================
+   Redraw territories
+   ============================ */
+function redrawAll() {
+  drawnLayer.clearLayers();
+  for (const territoryId in territories) {
+    const territory = territories[territoryId];
+    if (!territory || !territory.geometry) continue;
+    try {
+      L.geoJSON(territory.geometry, {
+        style: () => ({ 
+          color: "#000", 
+          weight: 1, 
+          fillColor: territory.color, 
+          fillOpacity: TERRITORY_OPACITY 
+        })
+      }).addTo(drawnLayer);
+    } catch (e) {
+      console.error("Redraw error:", e);
+    }
+  }
+}
+
+/* ============================
+   UI helpers
+   ============================ */
+function showError(msg) { 
+  errorMsg.textContent = msg; 
+  errorMsg.style.display = "block"; 
+  setTimeout(() => errorMsg.style.display = "none", 3000); 
+}
+
+function showInfo(msg) { 
+  infoMsg.textContent = msg; 
+  infoMsg.style.display = "block"; 
+  setTimeout(() => { 
+    infoMsg.style.display = "none"; 
+    infoMsg.textContent = "Drawing..."; 
+  }, 2000); 
+}
+
+function showAdminError(msg) { 
+  adminError.textContent = msg; 
+  adminError.style.display = "block"; 
+  setTimeout(() => adminError.style.display = "none", 3000); 
+}
+
+function showAdminInfo(msg) { 
+  adminInfo.textContent = msg; 
+  adminInfo.style.display = "block"; 
+  setTimeout(() => adminInfo.style.display = "none", 2000); 
+}
+
+function showAuthError(msg) { 
+  errorAuthMsg.textContent = msg; 
+  errorAuthMsg.style.display = "block"; 
+  setTimeout(() => errorAuthMsg.style.display = "none", 3000); 
+}
+
+function showAuthInfo(msg) { 
+  infoAuthMsg.textContent = msg; 
+  infoAuthMsg.style.display = "block"; 
+  setTimeout(() => infoAuthMsg.style.display = "none", 2000); 
+}
+
+/* ============================
+   Typing focus detection
+   ============================ */
+[modalEmail, modalPassword, modalUsername, chatInput, newUsername, adminTargetUsername].forEach(input => {
+  input.addEventListener("focus", () => { isTyping = true; });
+  input.addEventListener("blur", () => { isTyping = false; });
+});
+
+/* ============================
+   Auth modal logic
+   ============================ */
+loginRegisterBtn.onclick = () => authModal.style.display = "block";
+
+function showModalError(msg) {
+  modalError.textContent = msg;
+  modalError.style.display = "block";
+}
+
+modalToggle.onclick = () => {
+  if (modalTitle.textContent === "Login") {
+    modalTitle.textContent = "Register";
+    modalSubmit.textContent = "Register";
+    modalToggle.textContent = "Login Instead";
+    modalUsername.style.display = "block";
+  } else {
+    modalTitle.textContent = "Login";
+    modalSubmit.textContent = "Login";
+    modalToggle.textContent = "Register Instead";
+    modalUsername.style.display = "none";
+  }
+  modalError.style.display = "none";
+  modalEmail.value = modalPassword.value = modalUsername.value = "";
+};
+
+modalSubmit.onclick = async () => {
+  const email = modalEmail.value.trim();
+  const password = modalPassword.value.trim();
+  if (!email || !password) return showModalError("Please fill all fields");
+  
+  try {
+    if (modalTitle.textContent === "Register") {
+      const username = modalUsername.value.trim();
+      if (!username) return showModalError("Please enter a username");
+      
+      const usernameSnapshot = await get(ref(db, `usernames/${username}`));
+      if (usernameSnapshot.exists()) return showModalError("Username already taken!");
+      
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      await updateProfile(userCredential.user, { displayName: username });
+      await set(ref(db, `usernames/${username}`), true);
+      
+      showAuthInfo("Registration successful! Please log in.");
+      modalToggle.click();
+    } else {
+      await signInWithEmailAndPassword(auth, email, password);
+    }
+    authModal.style.display = "none";
+    modalEmail.value = modalPassword.value = modalUsername.value = "";
+  } catch (error) {
+    if (error.code === 'auth/email-already-in-use') {
+      showModalError("This email is already registered. Please use a different email or log in.");
+    } else if (error.code === 'auth/weak-password') {
+      showModalError("Password is too weak. Please use a stronger password.");
+    } else if (error.code === 'auth/invalid-email') {
+      showModalError("Invalid email address.");
+    } else {
+      const banSnap = await get(ref(db, `bans/${email.split('@')[0]}`));
+      if (banSnap.exists()) showModalError("You are banned.");
+      else showModalError(error.message);
+    }
+  }
+};
+
+/* ============================
+   Chat helpers
+   ============================ */
+function addChatMessage(msg) {
+  const username = msg.username || 'Anonymous';
+  const displayName = username === "MrFrozy" ? "👑 " + username : username;
+  const div = document.createElement("div");
+  div.className = `chat-message ${msg.uid === currentUser?.uid ? 'own' : 'other'}`;
+  div.innerHTML = `<strong>${displayName}:</strong> ${msg.text}`;
+  chatMessages.appendChild(div);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function updateChat() {
+  get(chatRef).then((snapshot) => {
+    chatMessages.innerHTML = "";
+    const messages = snapshot.val() || {};
+    Object.values(messages).forEach(addChatMessage);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }).catch((err) => console.error("Error fetching chat:", err));
+}
+
+onValue(chatRef, (snapshot) => {
+  updateChat();
+}, (err) => console.error("Error listening to chat:", err));
+
+sendMessage.addEventListener("click", () => {
+  sendChatMessage();
+});
+
+chatInput.addEventListener("keypress", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendChatMessage();
+  }
+});
+
+function sendChatMessage() {
+  if (!currentUser) {
+    return showError("Please log in to send messages.");
+  }
+  const text = chatInput.value.trim();
+  if (!text) return;
+  
+  const username = currentUser.displayName || currentUser.email.split('@')[0] || 'Anonymous';
+  get(ref(db, `mutes/${username}`)).then((muteSnap) => {
+    if (muteSnap.exists()) {
+      return showError("You are muted and cannot send messages.");
+    }
+    const messageRef = push(chatRef);
+    set(messageRef, {
+      text,
+      uid: currentUser.uid,
+      username,
+      timestamp: serverTimestamp()
+    }).then(() => {
+      chatInput.value = "";
+    }).catch((err) => {
+      console.error("Error sending message:", err);
+      showError("Failed to send message.");
+    });
+  }).catch((err) => {
+    console.error("Error checking mute status:", err);
+    showError("Failed to check mute status.");
+  });
+}
+
+/* ============================
+   Admin actions
+   ============================ */
+banUserBtn.onclick = async () => {
+  if (!isAdmin) return showAdminError("Only admins can ban users.");
+  const targetUsername = adminTargetUsername.value.trim();
+  if (!targetUsername) return showAdminError("Provide a username to ban.");
+  await set(ref(db, `bans/${targetUsername}`), { 
+    bannedBy: currentUser.displayName, 
+    timestamp: serverTimestamp() 
+  });
+  showAdminInfo(`Banned ${targetUsername}`);
+  adminTargetUsername.value = "";
+  if (currentUser && (currentUser.displayName === targetUsername || currentUser.email.split('@')[0] === targetUsername)) {
+    await signOut(auth);
+  }
+};
+
+unbanUserBtn.onclick = async () => {
+  if (!isAdmin) return showAdminError("Only admins can unban users.");
+  const targetUsername = adminTargetUsername.value.trim();
+  if (!targetUsername) return showAdminError("Provide a username to unban.");
+  await remove(ref(db, `bans/${targetUsername}`));
+  showAdminInfo(`Unbanned ${targetUsername}`);
+  adminTargetUsername.value = "";
+};
+
+muteUserBtn.onclick = async () => {
+  if (!isAdmin) return showAdminError("Only admins can mute users.");
+  const targetUsername = adminTargetUsername.value.trim();
+  if (!targetUsername) return showAdminError("Provide a username to mute.");
+  await set(ref(db, `mutes/${targetUsername}`), { 
+    mutedBy: currentUser.displayName, 
+    timestamp: serverTimestamp() 
+  });
+  showAdminInfo(`Muted ${targetUsername}`);
+  adminTargetUsername.value = "";
+};
+
+unmuteUserBtn.onclick = async () => {
+  if (!isAdmin) return showAdminError("Only admins can unmute users.");
+  const targetUsername = adminTargetUsername.value.trim();
+  if (!targetUsername) return showAdminError("Provide a username to unmute.");
+  await remove(ref(db, `mutes/${targetUsername}`));
+  showAdminInfo(`Unmuted ${targetUsername}`);
+  adminTargetUsername.value = "";
+};
+
+/* ============================
+   Auth state change
+   ============================ */
+onAuthStateChanged(auth, async (user) => {
+  currentUser = user;
+  if (user) {
+    profileBtn.style.display = "flex";
+    authButton.style.display = "none";
+    userDisplayName.textContent = user.displayName || user.email.split('@')[0];
+    isAdmin = (user.displayName || user.email.split('@')[0]) === ADMIN_USERNAME;
+    if (isAdmin) {
+      adminTab.style.display = "block";
+    }
+    chatToggleBtn.style.display = "flex";
+    
+    const banSnap = await get(ref(db, `bans/${user.displayName || user.email.split('@')[0]}`));
+    if (banSnap.exists()) {
+      showAdminError("You are banned from this app.");
+      await signOut(auth);
+    }
+    
+    const muteSnap = await get(ref(db, `mutes/${user.displayName || user.email.split('@')[0]}`));
+    if (muteSnap.exists()) {
+      showAdminError("You are muted and cannot send messages.");
+    }
+  } else {
+    profileBtn.style.display = "none";
+    authButton.style.display = "block";
+    adminTab.style.display = "none";
+    chatPanel.style.display = "none";
+    chatToggleBtn.style.display = "none";
+    dashboardModal.style.display = "none";
+    isAdmin = false;
+  }
+});
+
+logoutBtn.onclick = () => {
+  dashboardModal.style.display = "none";
+  signOut(auth).then(() => showAuthInfo("Logged out!"));
+};
+
+deleteAccountBtn.onclick = () => {
+  if (confirm("Delete account? This cannot be undone!")) {
+    const user = auth.currentUser;
+    deleteUser(user).then(() => {
+      dashboardModal.style.display = "none";
+      showAuthInfo("Account deleted.");
+    });
+  }
+};
+
+changeUsernameBtn.onclick = async () => {
+  const username = newUsername.value.trim();
+  if (!username) return showAuthError("Enter a username");
+  if (username.toLowerCase() === ADMIN_USERNAME.toLowerCase()) return showAuthError("Cannot use admin username!");
+  
+  const snapshot = await get(ref(db, `usernames/${username}`));
+  if (snapshot.exists()) return showAuthError("Username taken!");
+  
+  try {
+    await updateProfile(currentUser, { displayName: username });
+    await remove(ref(db, `usernames/${currentUser.displayName || currentUser.email.split('@')[0]}`)); 
+    await set(ref(db, `usernames/${username}`), true);
+    newUsername.value = "";
+    userDisplayName.textContent = username;
+    showAuthInfo("Username changed!");
+  } catch (error) {
+    showAuthError(error.message);
+  }
+};
+</script>
+</body>
+</html>
