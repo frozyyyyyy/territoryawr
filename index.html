@@ -1251,57 +1251,54 @@ async function processNewTerritory(newFeat) {
         }
         
         let updatedTerritories = { ...currentData };
-        let newGeometry = newFeat;
+        // Deep-clone so retries start fresh and we don't mutate the outer newFeat
+        let newGeometry = JSON.parse(JSON.stringify(newFeat));
         newGeometry.properties = { color: currentColor, userId: myUserId };
         
-        // Process intersections with ALL other players' territories (regardless of color)
+        // Merge with ALL same-color territories (own or other players), clip different-color ones
+        const sameColorIds = [];
         for (const territoryId in updatedTerritories) {
           const territory = updatedTerritories[territoryId];
           if (!territory || !territory.geometry) continue;
-          
-          // Skip own territory (same userId AND same color — will be merged below)
-          if (territory.userId === myUserId && territory.color === currentColor) continue;
-          
-          try {
-            const targetGeom = territory.geometry;
-            if (turf.intersect(targetGeom, newGeometry)) {
-              const diff = turf.difference(targetGeom, newGeometry);
-              if (diff) {
-                updatedTerritories[territoryId] = {
-                  ...territory,
-                  geometry: diff,
-                  lastModified: Date.now()
-                };
-              } else {
-                delete updatedTerritories[territoryId];
+          if (territory.color === currentColor) {
+            // Same color = merge regardless of who owns it
+            sameColorIds.push(territoryId);
+          } else {
+            // Different color = clip their territory
+            try {
+              if (turf.intersect(territory.geometry, newGeometry)) {
+                const diff = turf.difference(territory.geometry, newGeometry);
+                if (diff) {
+                  updatedTerritories[territoryId] = {
+                    ...territory,
+                    geometry: diff,
+                    lastModified: Date.now()
+                  };
+                } else {
+                  delete updatedTerritories[territoryId];
+                }
               }
+            } catch (e) {
+              console.error("Intersection error:", e);
             }
-          } catch (e) {
-            console.error("Intersection error:", e);
           }
         }
         
-        // Merge with existing territories of same color AND same user
-        let existingTerritoryOfMyColor = null;
-        let existingId = null;
-        for (const territoryId in updatedTerritories) {
-          const territory = updatedTerritories[territoryId];
-          if (territory && territory.color === currentColor && territory.userId === myUserId) {
-            existingTerritoryOfMyColor = territory.geometry;
-            existingId = territoryId;
-            break;
-          }
-        }
-        
-        if (existingTerritoryOfMyColor) {
+        // Union all same-color territories (any owner) into one shape
+        for (const existingId of sameColorIds) {
           try {
-            const merged = turf.union(existingTerritoryOfMyColor, newGeometry);
+            const existingGeom = updatedTerritories[existingId].geometry;
+            const merged = turf.union(
+              turf.cleanCoords(existingGeom),
+              turf.cleanCoords(newGeometry)
+            );
             if (merged) {
               newGeometry = merged;
               delete updatedTerritories[existingId];
             }
           } catch (e) {
-            console.error("Union error:", e);
+            console.error("Union error (non-fatal):", e);
+            delete updatedTerritories[existingId];
           }
         }
         
