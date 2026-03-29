@@ -459,7 +459,7 @@
 <div id="map"></div>
 <div class="panel">
   <strong>🌍 Territory War</strong><br>
-  <span id="desktopInstructions">Hold <b>E</b> to draw (max 75 km²).<br>Hold <b>R</b> to erase.<br>Hold <b>Ctrl + Click</b> to copy color.</span>
+  <span id="desktopInstructions">Hold <b>E</b> to draw (max 30 km²).<br>Hold <b>R</b> to erase.<br>Hold <b>Ctrl + Click</b> to copy color.</span>
   <span id="mobileInstructions" style="display:none;">Use buttons below to draw/erase.<br>Long-press territory to copy color.</span><br><br>
   <label id="changeColor" style="cursor:pointer;display:inline-block;margin-top:10px;padding:8px 15px;border:none;border-radius:5px;color:white;font-size:14px;font-weight:bold;background-color:#2196F3;position:relative;overflow:hidden;">
     Change Color
@@ -503,15 +503,7 @@
         <button id="unbanUserBtn">Unban User</button>
         <button id="muteUserBtn">Mute User</button>
         <button id="unmuteUserBtn">Unmute User</button>
-        <hr style="margin:12px 0;border:none;border-top:1px solid #ddd;">
-        <p style="margin:0 0 8px;font-weight:bold;font-size:13px;">🗺️ Paste Country</p>
-        <input type="text" id="adminCountryName" placeholder="Country name (e.g. Georgia)">
-        <label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;">
-          Color:
-          <input type="color" id="adminCountryColor" value="#ff0000" style="width:40px;height:30px;border:none;cursor:pointer;padding:0;">
-        </label>
-        <button id="pasteCountryBtn" style="background-color:#9c27b0;margin-top:8px;">🗺️ Paste Country</button>
-        <button id="clearCountryBtn" style="background-color:#f44336;margin-top:4px;">🗑️ Clear Country</button>
+
         <div id="adminError" class="error"></div>
         <div id="adminInfo" class="info"></div>
       </div>
@@ -695,6 +687,7 @@ closeDashboardBtn.onclick = () => {
 chatToggleBtn.onclick = () => {
   chatPanel.style.display = "flex";
   chatToggleBtn.style.display = "none";
+  setTimeout(() => { chatMessages.scrollTop = chatMessages.scrollHeight; }, 50);
 };
 
 profileBtn.onclick = () => {
@@ -1729,113 +1722,6 @@ unmuteUserBtn.onclick = async () => {
   await remove(ref(db, `mutes/${targetUsername}`));
   showAdminInfo(`Unmuted ${targetUsername}`);
   adminTargetUsername.value = "";
-};
-
-/* ============================
-   Country paste (admin)
-   ============================ */
-const adminCountryName = document.getElementById("adminCountryName");
-const adminCountryColor = document.getElementById("adminCountryColor");
-const pasteCountryBtn = document.getElementById("pasteCountryBtn");
-const clearCountryBtn = document.getElementById("clearCountryBtn");
-
-pasteCountryBtn.onclick = async () => {
-  if (!isAdmin) return showAdminError("Only admins can paste countries.");
-  const name = adminCountryName.value.trim();
-  if (!name) return showAdminError("Enter a country name.");
-  const color = adminCountryColor.value;
-
-  showAdminInfo("⏳ Fetching border...");
-  pasteCountryBtn.disabled = true;
-
-  try {
-    // Fetch from nominatim to get OSM relation ID
-    // Use countrycodes='' and rank to prefer sovereign nations over US states
-    const searchRes = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(name)}&format=json&limit=10&featuretype=country&addressdetails=1`,
-      { headers: { 'Accept-Language': 'en' } }
-    );
-    const searchData = await searchRes.json();
-    // Prefer results that are sovereign countries (place_rank 4), not US states (place_rank 8)
-    let country = searchData.find(r => r.osm_type === 'relation' && r.place_rank <= 4);
-    if (!country) country = searchData.find(r => r.osm_type === 'relation' && (r.type === 'administrative' || r.class === 'boundary') && !r.display_name.includes(', United States'));
-    if (!country) country = searchData.find(r => r.osm_type === 'relation' && (r.type === 'administrative' || r.class === 'boundary'));
-    if (!country) throw new Error("Country not found. Try a different spelling.");
-
-    const osmId = country.osm_id;
-    // Fetch GeoJSON from nominatim
-    const geoRes = await fetch(`https://nominatim.openstreetmap.org/lookup?osm_ids=R${osmId}&format=geojson&polygon_geojson=1`, {
-      headers: { 'Accept-Language': 'en' }
-    });
-    const geoData = await geoRes.json();
-    if (!geoData.features || !geoData.features.length) throw new Error("No geometry found.");
-
-    const feature = geoData.features[0];
-    let geom = feature.geometry;
-
-    // Simplify to reduce Firebase size
-    const simplified = turf.simplify(turf.feature(geom), { tolerance: 0.05, highQuality: false });
-    geom = simplified.geometry;
-
-    const countryTerritoryId = push(ref(db, "territories")).key;
-    const countryFeature = turf.feature(geom);
-    await runTransaction(territoriesRef, (currentData) => {
-      const updated = { ...(currentData || {}) };
-      // Clip or remove ANY territory that intersects the country border
-      for (const id in updated) {
-        const t = updated[id];
-        if (!t || !t.geometry) continue;
-        try {
-          if (turf.intersect(t.geometry, countryFeature)) {
-            const diff = turf.difference(t.geometry, countryFeature);
-            if (diff) {
-              updated[id] = { ...t, geometry: diff, lastModified: Date.now() };
-            } else {
-              delete updated[id];
-            }
-          }
-        } catch(e) {
-          // If geometry op fails, just delete it to be safe
-          delete updated[id];
-        }
-      }
-      updated[countryTerritoryId] = {
-        geometry: geom,
-        color: color,
-        userId: "admin",
-        username: ADMIN_USERNAME,
-        createdAt: Date.now(),
-        lastModified: Date.now()
-      };
-      return updated;
-    });
-
-    showAdminInfo(`✅ ${country.display_name.split(',')[0]} pasted!`);
-    adminCountryName.value = "";
-  } catch (e) {
-    showAdminError(`❌ ${e.message}`);
-  } finally {
-    pasteCountryBtn.disabled = false;
-  }
-};
-
-clearCountryBtn.onclick = async () => {
-  if (!isAdmin) return showAdminError("Only admins can clear countries.");
-  const color = adminCountryColor.value;
-  showAdminInfo("⏳ Clearing...");
-  try {
-    await runTransaction(territoriesRef, (currentData) => {
-      if (!currentData) return currentData;
-      const updated = { ...currentData };
-      for (const id in updated) {
-        if (updated[id] && updated[id].color === color) delete updated[id];
-      }
-      return updated;
-    });
-    showAdminInfo("✅ Cleared!");
-  } catch(e) {
-    showAdminError("❌ Failed to clear.");
-  }
 };
 
 /* ============================
