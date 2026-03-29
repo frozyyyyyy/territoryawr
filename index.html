@@ -1750,11 +1750,16 @@ pasteCountryBtn.onclick = async () => {
 
   try {
     // Fetch from nominatim to get OSM relation ID
-    const searchRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(name)}&format=json&limit=5&featuretype=country`, {
-      headers: { 'Accept-Language': 'en' }
-    });
+    // Use countrycodes='' and rank to prefer sovereign nations over US states
+    const searchRes = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(name)}&format=json&limit=10&featuretype=country&addressdetails=1`,
+      { headers: { 'Accept-Language': 'en' } }
+    );
     const searchData = await searchRes.json();
-    const country = searchData.find(r => r.osm_type === 'relation' && (r.type === 'administrative' || r.addresstype === 'country' || r.class === 'boundary'));
+    // Prefer results that are sovereign countries (place_rank 4), not US states (place_rank 8)
+    let country = searchData.find(r => r.osm_type === 'relation' && r.place_rank <= 4);
+    if (!country) country = searchData.find(r => r.osm_type === 'relation' && (r.type === 'administrative' || r.class === 'boundary') && !r.display_name.includes(', United States'));
+    if (!country) country = searchData.find(r => r.osm_type === 'relation' && (r.type === 'administrative' || r.class === 'boundary'));
     if (!country) throw new Error("Country not found. Try a different spelling.");
 
     const osmId = country.osm_id;
@@ -1773,11 +1778,26 @@ pasteCountryBtn.onclick = async () => {
     geom = simplified.geometry;
 
     const countryTerritoryId = push(ref(db, "territories")).key;
+    const countryFeature = turf.feature(geom);
     await runTransaction(territoriesRef, (currentData) => {
       const updated = { ...(currentData || {}) };
-      // Remove any existing territory of same color first
+      // Clip or remove ANY territory that intersects the country border
       for (const id in updated) {
-        if (updated[id] && updated[id].color === color) delete updated[id];
+        const t = updated[id];
+        if (!t || !t.geometry) continue;
+        try {
+          if (turf.intersect(t.geometry, countryFeature)) {
+            const diff = turf.difference(t.geometry, countryFeature);
+            if (diff) {
+              updated[id] = { ...t, geometry: diff, lastModified: Date.now() };
+            } else {
+              delete updated[id];
+            }
+          }
+        } catch(e) {
+          // If geometry op fails, just delete it to be safe
+          delete updated[id];
+        }
       }
       updated[countryTerritoryId] = {
         geometry: geom,
