@@ -756,7 +756,73 @@ onValue(territoriesRef, (snapshot) => {
   const data = snapshot.val() || {};
   territories = data;
   redrawAll();
+  autoCleanupOverlaps(data);
 });
+
+let cleanupRunning = false;
+async function autoCleanupOverlaps(data) {
+  if (cleanupRunning) return;
+  // Group territories by color
+  const byColor = {};
+  for (const id in data) {
+    const t = data[id];
+    if (!t || !t.geometry) continue;
+    if (!byColor[t.color]) byColor[t.color] = [];
+    byColor[t.color].push({ id, ...t });
+  }
+  // Check if any color has more than one territory entry (potential overlap)
+  const needsCleanup = Object.values(byColor).some(arr => arr.length > 1);
+  if (!needsCleanup) return;
+
+  cleanupRunning = true;
+  try {
+    await runTransaction(territoriesRef, (currentData) => {
+      if (!currentData) return currentData;
+      const updated = { ...currentData };
+      // Group by color
+      const groups = {};
+      for (const id in updated) {
+        const t = updated[id];
+        if (!t || !t.geometry) continue;
+        if (!groups[t.color]) groups[t.color] = [];
+        groups[t.color].push(id);
+      }
+      // For each color with multiple entries, union them all into one
+      for (const color in groups) {
+        const ids = groups[color];
+        if (ids.length < 2) continue;
+        let merged = null;
+        let keepId = ids[0];
+        let keepData = updated[ids[0]];
+        for (const id of ids) {
+          const geom = updated[id].geometry;
+          try {
+            if (!merged) {
+              merged = turf.cleanCoords(geom);
+            } else {
+              const result = turf.union(merged, turf.cleanCoords(geom));
+              if (result) merged = result;
+            }
+          } catch(e) { /* skip bad geometry */ }
+        }
+        if (merged) {
+          // Delete all entries for this color, replace with one merged entry
+          for (const id of ids) delete updated[id];
+          updated[keepId] = {
+            ...keepData,
+            geometry: merged,
+            lastModified: Date.now()
+          };
+        }
+      }
+      return updated;
+    });
+  } catch(e) {
+    console.error("Auto-cleanup failed:", e);
+  } finally {
+    cleanupRunning = false;
+  }
+}
 
 /* ============================
    Desktop drawing/erasing controls
@@ -1109,6 +1175,12 @@ async function finishMobileErase() {
   
   const poly = L.polygon(linePoints);
   const eraseFeat = poly.toGeoJSON();
+  const eraseAreaKm2 = turf.area(eraseFeat) / 1e6;
+  if (eraseAreaKm2 > MAX_DRAW_SIZE_KM2) {
+    showError(`❌ Erase area too large! Max ${MAX_DRAW_SIZE_KM2} km².`);
+    linePoints = [];
+    return;
+  }
   
   const now = Date.now();
   lastEraseTime = now;
@@ -1226,6 +1298,11 @@ async function stopErase() {
   linePoints.push(linePoints[0]);
   const poly = L.polygon(linePoints);
   const eraseFeat = poly.toGeoJSON();
+  const eraseAreaKm2 = turf.area(eraseFeat) / 1e6;
+  if (eraseAreaKm2 > MAX_DRAW_SIZE_KM2) { 
+    linePoints = [];
+    return showError(`❌ Erase area too large! Max ${MAX_DRAW_SIZE_KM2} km².`);
+  }
   
   const now = Date.now();
   lastEraseTime = now;
