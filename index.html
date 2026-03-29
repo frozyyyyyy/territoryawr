@@ -1254,13 +1254,13 @@ async function processNewTerritory(newFeat) {
         let newGeometry = newFeat;
         newGeometry.properties = { color: currentColor, userId: myUserId };
         
-        // Process intersections with other players' territories
+        // Process intersections with ALL other players' territories (regardless of color)
         for (const territoryId in updatedTerritories) {
           const territory = updatedTerritories[territoryId];
           if (!territory || !territory.geometry) continue;
           
-          // Skip if same color
-          if (territory.color === currentColor) continue;
+          // Skip own territory (same userId AND same color — will be merged below)
+          if (territory.userId === myUserId && territory.color === currentColor) continue;
           
           try {
             const targetGeom = territory.geometry;
@@ -1281,7 +1281,7 @@ async function processNewTerritory(newFeat) {
           }
         }
         
-        // Merge with existing territories of same color
+        // Merge with existing territories of same color AND same user
         let existingTerritoryOfMyColor = null;
         let existingId = null;
         for (const territoryId in updatedTerritories) {
@@ -1348,8 +1348,8 @@ async function eraseTerritory(eraseFeat) {
         const territory = updatedTerritories[territoryId];
         if (!territory || !territory.geometry) continue;
         
-        // Only erase from territories with my color and user ID
-        if (territory.color === currentColor && territory.userId === myUserId) {
+        // Only erase from territories owned by me (any color)
+        if (territory.userId === myUserId) {
           foundMyTerritory = true;
           try {
             const diff = turf.difference(territory.geometry, eraseFeat);
@@ -1403,10 +1403,11 @@ function redrawAll() {
     try {
       L.geoJSON(territory.geometry, {
         style: () => ({ 
-          color: "#000", 
-          weight: 1, 
+          color: territory.color, 
+          weight: 2, 
           fillColor: territory.color, 
-          fillOpacity: TERRITORY_OPACITY 
+          fillOpacity: TERRITORY_OPACITY,
+          opacity: 1
         })
       }).addTo(drawnLayer);
     } catch (e) {
