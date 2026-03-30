@@ -351,6 +351,17 @@
   #mobileEraseBtn.active {
     background-color: #e91e63;
   }
+  .activity-entry {
+    padding: 8px 15px;
+    border-bottom: 1px solid #f0f0f0;
+    line-height: 1.4;
+  }
+  .activity-entry:hover { background: #f9f9f9; }
+  .activity-entry .act-time { color: #999; font-size: 10px; }
+  .activity-entry .act-join { color: #4CAF50; }
+  .activity-entry .act-leave { color: #f44336; }
+  .activity-entry .act-draw { color: #2196F3; }
+  .activity-entry a { color: #2196F3; text-decoration: underline; }
   @media (max-width: 768px) {
     .panel { 
       max-width: 140px; 
@@ -465,13 +476,6 @@
     Change Color
     <input type="color" id="colorPicker" value="#00ff00" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;border:none;padding:0;margin:0;">
   </label>
-  <div id="hueSliderContainer" style="display:none;margin-top:8px;">
-    <div style="font-size:11px;color:#555;margin-bottom:4px;">Hue (S=100% B=100%)</div>
-    <input type="range" id="hueSlider" min="0" max="359" value="120"
-      style="width:100%;height:22px;cursor:pointer;
-             background:linear-gradient(to right,hsl(0,100%,50%),hsl(30,100%,50%),hsl(60,100%,50%),hsl(90,100%,50%),hsl(120,100%,50%),hsl(150,100%,50%),hsl(180,100%,50%),hsl(210,100%,50%),hsl(240,100%,50%),hsl(270,100%,50%),hsl(300,100%,50%),hsl(330,100%,50%),hsl(360,100%,50%));
-             border-radius:4px;appearance:none;-webkit-appearance:none;outline:none;border:none;">
-  </div>
   <div class="error" id="errorMsg"></div>
   <div class="info" id="infoMsg">Drawing...</div>
   <button id="mobileDrawBtn" style="display:none;margin-top:10px;">🎨 Draw Mode: OFF</button>
@@ -493,6 +497,7 @@
     <div class="menu-tabs">
       <button class="menu-tab active" data-tab="profile">👤 Profile</button>
       <button class="menu-tab" data-tab="admin" id="adminTab" style="display: none;">🔧 Admin</button>
+      <button class="menu-tab" data-tab="activity" id="activityTab" style="display: none;">📋 Log</button>
     </div>
     <div class="modal-body">
       <div class="tab-content active" id="profileTab">
@@ -521,6 +526,13 @@
         <button id="clearCountryBtn" style="background-color:#f44336;margin-top:4px;">🗑️ Clear Country</button>
         <div id="adminError" class="error"></div>
         <div id="adminInfo" class="info"></div>
+      </div>
+      <div class="tab-content" id="activityTabContent" style="padding:0;">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 15px;border-bottom:1px solid #eee;">
+          <strong style="font-size:13px;">📋 Activity Log</strong>
+          <button id="clearActivityLogBtn" style="margin:0;padding:4px 8px;font-size:11px;background:#f44336;">Clear</button>
+        </div>
+        <div id="activityLog" style="max-height:320px;overflow-y:auto;font-size:12px;padding:0;"></div>
       </div>
     </div>
   </div>
@@ -579,6 +591,7 @@ const playersRef = ref(db, "players");
 const bansRef = ref(db, "bans");
 const mutesRef = ref(db, "mutes");
 const usernamesRef = ref(db, "usernames");
+const activityRef = ref(db, "activityLog");
 
 const ADMIN_USERNAME = "MrFrozy";
 
@@ -738,59 +751,18 @@ if (isMobile) {
 /* ============================
    Color picker UI
    ============================ */
-function hslToHex(h) {
-  const s = 1, l = 0.5;
-  const a = s * Math.min(l, 1 - l);
-  const f = n => {
-    const k = (n + h / 30) % 12;
-    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
-    return Math.round(255 * color).toString(16).padStart(2, '0');
-  };
-  return `#${f(0)}${f(8)}${f(4)}`;
-}
-
-function hexToHue(hex) {
-  const r = parseInt(hex.slice(1,3),16)/255;
-  const g = parseInt(hex.slice(3,5),16)/255;
-  const b = parseInt(hex.slice(5,7),16)/255;
-  const max = Math.max(r,g,b), min = Math.min(r,g,b);
-  if (max === min) return 0;
-  const d = max - min;
-  let h = max === r ? (g-b)/d + (g<b?6:0) : max === g ? (b-r)/d+2 : (r-g)/d+4;
-  return Math.round(h * 60) % 360;
-}
-
-const hueSlider = document.getElementById("hueSlider");
-const hueSliderContainer = document.getElementById("hueSliderContainer");
-
-if (isMobile) {
-  // On mobile: use hue slider only, always full saturation & brightness
-  hueSliderContainer.style.display = "block";
-  const savedHue = localStorage.getItem("lastHue") !== null
-    ? parseInt(localStorage.getItem("lastHue"))
-    : hexToHue(currentColor);
-  hueSlider.value = savedHue;
-  currentColor = hslToHex(savedHue);
+changeColorBtn.style.backgroundColor = currentColor;
+colorPicker.value = currentColor;
+colorPicker.addEventListener("input", (e) => {
+  currentColor = e.target.value;
   changeColorBtn.style.backgroundColor = currentColor;
   localStorage.setItem("lastColor", currentColor);
-  localStorage.setItem("lastHue", savedHue);
-
-  hueSlider.addEventListener("input", () => {
-    const hue = parseInt(hueSlider.value);
-    currentColor = hslToHex(hue);
-    changeColorBtn.style.backgroundColor = currentColor;
-    localStorage.setItem("lastColor", currentColor);
-    localStorage.setItem("lastHue", hue);
-  });
-} else {
-  // On desktop: use native color picker
+});
+colorPicker.addEventListener("change", (e) => {
+  currentColor = e.target.value;
   changeColorBtn.style.backgroundColor = currentColor;
-  colorPicker.onchange = (e) => {
-    currentColor = e.target.value;
-    changeColorBtn.style.backgroundColor = currentColor;
-    localStorage.setItem("lastColor", currentColor);
-  };
-}
+  localStorage.setItem("lastColor", currentColor);
+});
 
 /* ============================
    Player presence
@@ -1459,6 +1431,18 @@ async function processNewTerritory(newFeat) {
       });
       
       showInfo("✅ Territory claimed!");
+      // Log activity
+      if (currentUser) {
+        const center = turf.centroid(newFeat);
+        const [lng, lat] = center.geometry.coordinates;
+        logActivity({
+          type: "draw",
+          username: currentUser.displayName || currentUser.email.split('@')[0],
+          uid: currentUser.uid,
+          color: currentColor,
+          lat, lng
+        });
+      }
       return; // success, stop retrying
     } catch (error) {
       console.error(`Territory attempt ${attempt + 1} failed:`, error);
@@ -1516,6 +1500,16 @@ async function eraseTerritory(eraseFeat) {
       });
 
       showInfo("✂️ Territory erased!");
+      if (currentUser) {
+        const center = turf.centroid(eraseFeat);
+        const [lng, lat] = center.geometry.coordinates;
+        logActivity({
+          type: "erase",
+          username: currentUser.displayName || currentUser.email.split('@')[0],
+          uid: currentUser.uid,
+          lat, lng
+        });
+      }
       return; // success
     } catch (error) {
       console.error(`Erase attempt ${attempt + 1} failed:`, error);
@@ -1903,6 +1897,79 @@ clearCountryBtn.onclick = async () => {
 };
 
 /* ============================
+   Activity Log (admin)
+   ============================ */
+const activityTab = document.getElementById("activityTab");
+const activityLog = document.getElementById("activityLog");
+const clearActivityLogBtn = document.getElementById("clearActivityLogBtn");
+
+// Tab switching for activity
+document.querySelectorAll('.menu-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    if (tab.getAttribute('data-tab') === 'activity') {
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      document.getElementById('activityTabContent').classList.add('active');
+    }
+  });
+});
+
+function renderActivityLog(entries) {
+  activityLog.innerHTML = "";
+  const sorted = Object.values(entries || {}).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+  if (!sorted.length) {
+    activityLog.innerHTML = '<div style="padding:15px;color:#999;font-size:12px;">No activity yet.</div>';
+    return;
+  }
+  sorted.forEach(e => {
+    const div = document.createElement("div");
+    div.className = "activity-entry";
+    const time = e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : "";
+    const date = e.timestamp ? new Date(e.timestamp).toLocaleDateString() : "";
+    if (e.type === "join") {
+      div.innerHTML = `<span class="act-join">🟢 <b>${e.username}</b> joined</span> <span class="act-time">${date} ${time}</span>`;
+    } else if (e.type === "leave") {
+      div.innerHTML = `<span class="act-leave">🔴 <b>${e.username}</b> left</span> <span class="act-time">${date} ${time}</span>`;
+    } else if (e.type === "draw") {
+      const lat = e.lat ? e.lat.toFixed(4) : "?";
+      const lng = e.lng ? e.lng.toFixed(4) : "?";
+      const mapUrl = `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=10/${lat}/${lng}`;
+      div.innerHTML = `<span class="act-draw">🖊️ <b>${e.username}</b> drew at <a href="${mapUrl}" target="_blank">${lat}, ${lng}</a></span> <span style="display:inline-block;width:10px;height:10px;background:${e.color || '#ccc'};border-radius:2px;vertical-align:middle;margin-left:3px;"></span> <span class="act-time">${date} ${time}</span>`;
+    } else if (e.type === "erase") {
+      const lat = e.lat ? e.lat.toFixed(4) : "?";
+      const lng = e.lng ? e.lng.toFixed(4) : "?";
+      const mapUrl = `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=10/${lat}/${lng}`;
+      div.innerHTML = `<span style="color:#ff9800;">✂️ <b>${e.username}</b> erased at <a href="${mapUrl}" target="_blank">${lat}, ${lng}</a></span> <span class="act-time">${date} ${time}</span>`;
+    }
+    activityLog.appendChild(div);
+  });
+}
+
+onValue(activityRef, (snap) => {
+  if (!isAdmin) return;
+  renderActivityLog(snap.val());
+});
+
+clearActivityLogBtn.onclick = async () => {
+  if (!isAdmin) return;
+  await set(activityRef, null);
+};
+
+async function logActivity(entry) {
+  try {
+    const newEntry = push(activityRef);
+    await set(newEntry, { ...entry, timestamp: Date.now() });
+    // Keep only last 200 entries
+    const snap = await get(activityRef);
+    const all = snap.val() || {};
+    const keys = Object.keys(all);
+    if (keys.length > 200) {
+      const toDelete = keys.slice(0, keys.length - 200);
+      for (const k of toDelete) await set(ref(db, `activityLog/${k}`), null);
+    }
+  } catch(e) { console.error("Activity log error:", e); }
+}
+
+/* ============================
    Auth state change
    ============================ */
 onAuthStateChanged(auth, async (user) => {
@@ -1911,9 +1978,11 @@ onAuthStateChanged(auth, async (user) => {
     profileBtn.style.display = "flex";
     authButton.style.display = "none";
     userDisplayName.textContent = user.displayName || user.email.split('@')[0];
+    logActivity({ type: "join", username: user.displayName || user.email.split('@')[0], uid: user.uid });
     isAdmin = (user.displayName || user.email.split('@')[0]) === ADMIN_USERNAME;
     if (isAdmin) {
       adminTab.style.display = "block";
+      document.getElementById("activityTab").style.display = "block";
     }
     chatToggleBtn.style.display = "flex";
     
@@ -1931,6 +2000,7 @@ onAuthStateChanged(auth, async (user) => {
     profileBtn.style.display = "none";
     authButton.style.display = "block";
     adminTab.style.display = "none";
+    document.getElementById("activityTab").style.display = "none";
     chatPanel.style.display = "none";
     chatToggleBtn.style.display = "none";
     dashboardModal.style.display = "none";
@@ -1940,6 +2010,7 @@ onAuthStateChanged(auth, async (user) => {
 
 logoutBtn.onclick = () => {
   dashboardModal.style.display = "none";
+  if (currentUser) logActivity({ type: "leave", username: currentUser.displayName || currentUser.email.split('@')[0], uid: currentUser.uid });
   signOut(auth).then(() => showAuthInfo("Logged out!"));
 };
 
